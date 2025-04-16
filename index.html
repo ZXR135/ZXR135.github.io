@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+  <meta charset="UTF-8">
+  <title>ArcGIS 疫情地图</title>
+  <link rel="stylesheet" href="https://js.arcgis.com/4.32/esri/themes/light/main.css">
+  <style>
+    /* 全局样式 */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body,
+    html {
+      height: 100%;
+      font-family: "微软雅黑", sans-serif;
+    }
+
+    /* 头部样式 */
+    header {
+      height: 60px;
+      background: #2c3e50;
+      color: white;
+      text-align: center;
+      line-height: 60px;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    /* 主地图容器 */
+    main {
+      height: calc(100% - 60px);
+    }
+
+    #viewDiv {
+      height: 100%;
+      width: 100%;
+    }
+
+    /* 底图选择器样式 */
+    #basemapGallery {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 999;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 12px 20px;
+      /* 增加水平内边距 */
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      display: flex;
+      gap: 8px;
+      /* 缩小项间距 */
+      width: 95%;
+      /* 改为固定宽度 */
+      max-width: 1200px;
+      /* 新增最大宽度限制 */
+      overflow-x: auto;
+      backdrop-filter: blur(5px);
+    }
+
+    .basemap-item {
+      flex: 0 0 120px;
+      /* 增加项宽度 */
+      height: 90px;
+      /* 增加项高度 */
+      border: 2px solid transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background-size: cover;
+      background-position: center;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .basemap-item:hover {
+      transform: scale(1.08);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .basemap-item.active {
+      border-color: #0079c1;
+      box-shadow: 0 0 12px rgba(0, 121, 193, 0.4);
+    }
+
+    /* 移动端适配 */
+    @media (max-width: 600px) {
+      #basemapGallery {
+        bottom: 10px;
+        padding: 8px;
+        gap: 6px;
+      }
+
+      .basemap-item {
+        flex: 0 0 80px;
+        height: 60px;
+      }
+    }
+  </style>
+  <script src="https://js.arcgis.com/4.32/"></script>
+</head>
+
+<body>
+  <header>
+    ArcGIS 新冠疫情地图
+  </header>
+
+  <!-- 底图选择器 -->
+  <div id="basemapGallery">
+    <div class="basemap-item active" data-basemap="topo-vector"
+      style="background-image: url(https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/0/0/0)">
+    </div>
+
+    <div class="basemap-item" data-basemap="satellite"
+      style="background-image: url(https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/0/0/0)">
+    </div>
+
+    <div class="basemap-item" data-basemap="streets"
+      style="background-image: url(https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/0/0/0)">
+    </div>
+
+    <div class="basemap-item" data-basemap="dark-gray"
+      style="background-image: url(https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/0/0/0)">
+    </div>
+
+    <div class="basemap-item" data-basemap="national-geographic"
+      style="background-image: url(https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/0/0/0)">
+    </div>
+
+    <div class="basemap-item" data-basemap="osm"
+      style="background-image: url(https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/0/0/0)">
+    </div>
+  </div>
+
+  <main>
+    <div id="viewDiv"></div>
+  </main>
+
+  <script>
+    require([
+      "esri/Map",
+      "esri/views/MapView",
+      "esri/layers/FeatureLayer",
+      "esri/widgets/ScaleBar",
+      "esri/widgets/Legend",
+      "esri/widgets/Search",
+      "esri/widgets/LayerList"
+    ], function (
+      Map, MapView, FeatureLayer,
+      ScaleBar, Legend, Search, LayerList
+    ) {
+      // 初始化地图
+      const map = new Map({
+        basemap: "topo-vector"
+      });
+
+      // 创建地图视图
+      const view = new MapView({
+        container: "viewDiv",
+        map: map,
+        center: [116.4, 39.9], // 北京坐标
+        zoom: 4
+      });
+
+      // 添加疫情图层
+      const featureLayer = new FeatureLayer({
+        url: "https://www.geosceneonline.cn/server/rest/services/Hosted/新型冠状病毒疫情全球病例统计new/FeatureServer/0",
+        title: "新冠疫情分布",
+        opacity: 0.8
+      });
+      map.add(featureLayer);
+
+      // 底图切换功能
+      const basemapItems = document.querySelectorAll(".basemap-item");
+      basemapItems.forEach(item => {
+        item.addEventListener("click", () => {
+          // 更新激活状态
+          basemapItems.forEach(i => i.classList.remove("active"));
+          item.classList.add("active");
+
+          // 切换底图
+          map.basemap = item.dataset.basemap;
+        });
+      });
+
+      // 添加地图控件
+      view.ui.add(new ScaleBar({
+        view: view,
+        unit: "metric"
+      }), "bottom-left");
+
+      view.ui.add(new Legend({
+        view: view,
+        layerInfos: [{
+          layer: featureLayer,
+          title: "疫情图例"
+        }]
+      }), "top-right");
+
+      view.ui.add(new Search({
+        view: view
+      }), "top-left");
+
+      view.ui.add(new LayerList({
+        view: view
+      }), "bottom-right");
+    });
+  </script>
+</body>
+
+</html>
